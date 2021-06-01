@@ -19,3 +19,6 @@ resource "aws_route_table_association" "public" {
 output "id" {
   value = aws_subnet.subnet.id
 }
+output "cidr_block" {
+  value = aws_subnet.subnet.cidr_block
+}
