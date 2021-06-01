@@ -22,14 +22,14 @@ resource "aws_route_table" "public_rt" {
     "Name" = "public-route-table"
   }
 }
-
+#Add ig entry to route table
 resource "aws_route" "public_internet_gateway" {
   route_table_id         = "${aws_route_table.public_rt.id}"
   destination_cidr_block = "0.0.0.0/0"
   gateway_id             = "${aws_internet_gateway.ig.id}"
 }
 # Two public subnets and two private subnets 
-# Two AZ ap-south-1a and ap-south-1b
+# Two AZs ap-south-1a and ap-south-1b
 module "public_subnet_A" {
   vpc_id     = module.vpc.id
   cidr_block = "10.0.1.0/24"
@@ -60,4 +60,10 @@ module "private_subnet_B" {
   Name = "Private B"
   source = "./subnet_module"
 }
-
+#EC2 instance in Public subnet
+resource "aws_instance" "BastionHost" {
+  ami = ami-010aff33ed5991201
+  instance_type = "t2.micro"
+  aavailability_zone = "ap-south-1a"
+  subnet_id = module.public_subnet_A.id
+}
