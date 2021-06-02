@@ -92,7 +92,8 @@ resource "aws_instance" "BastionHost" {
   }
 }
 # Private security group
-resource "aws_security_group" "private_sg1" {
+
+resource "aws_security_group" "private_sg" {
   vpc_id = module.vpc.id
   ingress {
     cidr_blocks = [
@@ -103,19 +104,48 @@ resource "aws_security_group" "private_sg1" {
     to_port = 22
     protocol = "tcp"
   }
-}
-resource "aws_security_group" "private_sg2" {
-  vpc_id = module.vpc.id
   ingress {
     cidr_blocks = [
-      module.public_subnet_A.cidr_block,
-      module.public_subnet_B.cidr_block
+      "0.0.0.0/0"
     ]
     from_port = 80
     to_port = 80
     protocol = "tcp"
   }
+  ingress {
+    cidr_blocks = [
+      "0.0.0.0/0"
+    ]
+    from_port = 8080
+    to_port = 8080
+    protocol = "tcp"
+  }
+  ingress {
+    cidr_blocks = [
+      "0.0.0.0/0"
+    ]
+    from_port = 443
+    to_port = 443
+    protocol = "tcp"
+  }
+  egress {
+    cidr_blocks = [
+      "0.0.0.0/0"
+    ]
+    from_port = 80
+    to_port = 80
+    protocol = "tcp"
+  }
+  egress {
+    cidr_blocks = [
+      "0.0.0.0/0"
+    ]
+    from_port = 443
+    to_port = 443
+    protocol = "tcp"
+  }
 }
+
 #launch template for autoscaling group
 resource "aws_launch_template" "private_lt" {
   name_prefix   = "private_lt"
@@ -123,18 +153,37 @@ resource "aws_launch_template" "private_lt" {
   instance_type = "t2.micro"
   key_name = "code-mancers"
   vpc_security_group_ids = [
-    aws_security_group.private_sg1.id,
-    aws_security_group.private_sg2.id
+    aws_security_group.private_sg.id
 
   ]
   # security_group_names = [aws_security_group.private_sg.id]
   
 } 
 #load balancer
+resource "aws_security_group" "elb_sg" {
+  vpc_id = module.vpc.id
+  ingress {
+    cidr_blocks = [
+      "0.0.0.0/0"
+    ]
+    from_port = 80
+    to_port = 80
+    protocol = "tcp"
+  }
+  egress {
+    cidr_blocks = [
+      "0.0.0.0/0"
+    ]
+    from_port = 80
+    to_port = 80
+    protocol = "tcp"
+  }
+}
 resource "aws_elb" "private_asg_elb" {
-  subnets = [module.private_subnet_A.id,module.private_subnet_B.id]
+  subnets = [module.public_subnet_A.id,module.public_subnet_B.id]
   internal = true
   name = "private-asg-elb"
+  security_groups = [aws_security_group.elb_sg.id]
   listener {
     instance_port     = 80
     instance_protocol = "http"
@@ -150,7 +199,7 @@ resource "aws_elb" "private_asg_elb" {
 resource "aws_autoscaling_group" "private_asg" {
   # availability_zones = ["ap-south-1a","ap-south-1b"]
   depends_on = [
-    aws_launch_template.private_lt,
+    aws_launch_template.private_lt
 
   ]
   load_balancers = [aws_elb.private_asg_elb.id]
