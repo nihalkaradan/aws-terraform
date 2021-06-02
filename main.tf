@@ -50,6 +50,7 @@ module "private_subnet_A" {
   vpc_id     = module.vpc.id
   cidr_block = "10.0.3.0/24"
   availability_zone = "ap-south-1a"
+  route_table_id = aws_route_table.private_rt.id
   Name = "Private A"
   source = "./subnet_module"
 }
@@ -57,6 +58,7 @@ module "private_subnet_B" {
   vpc_id     = module.vpc.id
   cidr_block = "10.0.4.0/24"
   availability_zone = "ap-south-1b"
+  route_table_id = aws_route_table.private_rt.id
   Name = "Private B"
   source = "./subnet_module"
 }
@@ -137,7 +139,34 @@ resource "aws_security_group" "private_sg" {
     protocol = "tcp"
   }
 }
+## NAT gateway
+#EIP for NAT gw
+resource "aws_eip" "nat_gw_eip"{
+  vpc = true
+  depends_on = [aws_internet_gateway.ig]
+} 
+# NAT gateway 
+resource "aws_nat_gateway" "gw" {
+  allocation_id = aws_eip.nat_gw_eip.id
+  subnet_id     = module.public_subnet_A.id
 
+  tags = {
+    Name = "gw NAT"
+  }
+}
+#route table for private subnet
+resource "aws_route_table" "private_rt" {
+  vpc_id = module.vpc.id
+  tags = {
+    "Name" = "private-route-table"
+  }
+}
+##
+resource "aws_route" "private_nat_gateway" {
+  route_table_id         = "${aws_route_table.private_rt.id}"
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = "${aws_nat_gateway.gw.id}"
+}
 #launch template for autoscaling group
 resource "aws_launch_template" "private_lt" {
   name_prefix   = "private_lt"
