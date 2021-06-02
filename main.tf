@@ -167,19 +167,7 @@ resource "aws_route" "private_nat_gateway" {
   destination_cidr_block = "0.0.0.0/0"
   gateway_id             = "${aws_nat_gateway.gw.id}"
 }
-#launch template for autoscaling group
-resource "aws_launch_template" "private_lt" {
-  name_prefix   = "private_lt"
-  image_id      = "ami-010aff33ed5991201"
-  instance_type = "t2.micro"
-  key_name = "code-mancers"
-  vpc_security_group_ids = [
-    aws_security_group.private_sg.id
 
-  ]
-  # security_group_names = [aws_security_group.private_sg.id]
-  
-} 
 #load balancer
 resource "aws_security_group" "elb_sg" {
   vpc_id = module.vpc.id
@@ -200,6 +188,20 @@ resource "aws_security_group" "elb_sg" {
     protocol = "tcp"
   }
 }
+#launch template for autoscaling group
+resource "aws_launch_template" "private_lt" {
+  name_prefix   = "private_lt"
+  image_id      = "ami-010aff33ed5991201"
+  instance_type = "t2.micro"
+  key_name = "code-mancers"
+  vpc_security_group_ids = [
+    aws_security_group.private_sg.id
+
+  ]
+  # security_group_names = [aws_security_group.private_sg.id]
+  
+} 
+# Resource ELB
 resource "aws_elb" "private_asg_elb" {
   subnets = [module.public_subnet_A.id,module.public_subnet_B.id]
   internal = true
@@ -216,6 +218,7 @@ resource "aws_elb" "private_asg_elb" {
     Name = "private-asg-elb"
   }
 }
+
 #autoscaling group and attach loadbalancer
 resource "aws_autoscaling_group" "private_asg" {
   # availability_zones = ["ap-south-1a","ap-south-1b"]
@@ -226,11 +229,62 @@ resource "aws_autoscaling_group" "private_asg" {
   load_balancers = [aws_elb.private_asg_elb.id]
   vpc_zone_identifier = [module.private_subnet_A.id,module.private_subnet_B.id]
   desired_capacity   = 2
-  max_size           = 2
+  max_size           = 5
   min_size           = 2
   launch_template {
     id      = aws_launch_template.private_lt.id
     version = "$Latest"
   }
   
+}
+
+#autoscaling policy
+resource "aws_autoscaling_policy" "asg-cpu-policy" {
+  name = "asg-cpu-policy"
+  autoscaling_group_name = aws_autoscaling_group.private_asg.name
+  adjustment_type = "ChangeInCapacity"
+  scaling_adjustment = "1"
+  cooldown = "300"
+  policy_type = "SimpleScaling"
+}
+#Cloud watch alarm
+resource "aws_cloudwatch_metric_alarm" "asg-cpu-alarm"{
+  alarm_name = "asg-cpu-alarm"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods = "2"
+  metric_name = "CPUUtilization"
+  namespace = "AWS/EC2"
+  period = "120"
+  statistic = "Average"
+  threshold = "30"
+  dimensions = {
+    "AutoScalingGroupName" = "${aws_autoscaling_group.private_asg.name}"
+  }
+  actions_enabled = true
+  alarm_actions = ["${aws_autoscaling_policy.asg-cpu-policy.arn}"]
+}
+
+resource "aws_autoscaling_policy" "asg-cpu-policy-scaledown" {
+  name = "asg-cpu-policy-scaledown"
+  autoscaling_group_name = "${aws_autoscaling_group.private_asg.name}"
+  adjustment_type = "ChangeInCapacity"
+  scaling_adjustment = "-1"
+  cooldown = "300"
+  policy_type = "SimpleScaling"
+}
+
+resource "aws_cloudwatch_metric_alarm" "asg-cpu-alarm-scaledown" {
+  alarm_name = "asg-cpu-alarm-scaledown"
+  comparison_operator = "LessThanOrEqualToThreshold"
+  evaluation_periods = "2"
+  metric_name = "CPUUtilization"
+  namespace = "AWS/EC2"
+  period = "120"
+  statistic = "Average"
+  threshold = "5"
+  dimensions = {
+  "AutoScalingGroupName" = "${aws_autoscaling_group.private_asg.name}"
+  }
+  actions_enabled = true
+  alarm_actions = ["${aws_autoscaling_policy.asg-cpu-policy-scaledown.arn}"]
 }
