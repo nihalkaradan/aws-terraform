@@ -228,7 +228,6 @@ resource "aws_autoscaling_group" "private_asg" {
   ]
   load_balancers = [aws_elb.private_asg_elb.id]
   vpc_zone_identifier = [module.private_subnet_A.id,module.private_subnet_B.id]
-  desired_capacity   = 2
   max_size           = 5
   min_size           = 2
   launch_template {
