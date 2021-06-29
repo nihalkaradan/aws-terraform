@@ -1,4 +1,4 @@
-# codemancers-terraform
+# AWS - Terraform
 Create below setup using Hashicorp Terraform:
 1. One VPC with name 'main'
 2. Two Availability Zones
